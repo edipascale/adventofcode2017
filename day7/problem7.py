@@ -1,105 +1,45 @@
 from collections import deque, Counter
-
-class Node:
-    def __init__(self, name, weight=0):
-        self.name = name
-        self.parent = None
-        self.children = []
-        self.weight = weight
-        self.totalWeight = weight
-        self.balanced = True
-
-    def addChild(self, child):
-        self.children.append(child)
-        child.parent = self
-        self.totalWeight += child.weight
-        self.checkBalance()
-        if self.parent:
-            self.parent.notifyNewWeight(child.weight)
-
-    def addChildren(self, children):
-        for c in children:
-            self.addChild(c)
-
-    def changeWeight(self, newWeight):
-        # print(self.weight, self.totalWeight, newWeight)
-        weightDiff = newWeight - self.weight
-        self.totalWeight += weightDiff
-        self.weight = newWeight
-        # print(self.weight, self.totalWeight, weightDiff)
-        if self.parent:
-            self.parent.notifyNewWeight(weightDiff)
-
-    def notifyNewWeight(self, weightDiff):
-        self.totalWeight += weightDiff
-        self.checkBalance()
-        if self.parent:
-            self.parent.notifyNewWeight(weightDiff)
-
-    def checkBalance(self):
-        if len(set((c.totalWeight for c in self.children))) > 1:
-            self.balanced = False
-        else:
-            self.balanced = True
-
-    def __repr__(self):
-        return "<Node name:{} weight:{} total:{}>".format(
-            self.name, self.weight, self.totalWeight
-        )
-
-
-def loadBalance(root):
-    current = root
-    workToDo = False
-    while not current.balanced:
-        workToDo = True
-        print (current.name, "is unbalanced -> ", [
-               c.totalWeight for c in current.children])
-        # there is only one so we only need to find it
-        try:
-            child = next(c for c in current.children if not c.balanced)
-        except:
-            break
-        current = child
-    if not workToDo:
-        return True
-    weights = [c.totalWeight for c in current.children]
-    count = Counter(weights)
-    problem = next(c for c in count if count[c] == 1)
-    weights.remove(problem)
-    newWeight = weights.pop()
-    problemChild = next(c for c in current.children if c.totalWeight == problem)
-    print("Balancing {} from {} to {}".format(problemChild.name, problem, newWeight))
-    difference = newWeight - problem
-    problemChild.changeWeight(problemChild.weight + difference)
-    return False
-
-
+import networkx as nx
 
 nodes = {}
 rootCandidates = set()
 nonRoots = set()
+graph = nx.DiGraph()
 with open('input.txt', 'r') as f:
     for line in f:
         name = line.split(' ')[0]
         weight = int(line.split(' ')[1].lstrip('(').rstrip(')\n '))
-        if name in nodes:
-            nodes[name].changeWeight(weight)
-        else:
-            nodes[name] = Node(name, weight)
+        graph.add_node(name, weight=weight)
         (_, _, children) = line.partition('-> ')
         if children != '':
             children = [c.rstrip(',\n') for c in children.split(' ')]
             rootCandidates.add(name)
             nonRoots = nonRoots | set(children)
             for c in children:
-                if c not in nodes:
-                    nodes[c] = Node(c)
-                nodes[name].addChild(nodes[c])
+                graph.add_edge(name, c)
 root = (rootCandidates - nonRoots).pop()
 print(root)
 #print(*(c.name for c in nodes[root].children), sep=' ')
-print(nodes[root])
-loadBalance(nodes[root])
-print(nodes[root])
-loadBalance(nodes[root])
+ordered = list(nx.topological_sort(graph))
+weights = {}
+for node in reversed(ordered):
+    w_attr = nx.get_node_attributes(graph, 'weight')
+    total = w_attr[node]
+    counts = Counter(weights[child] for child in graph[node])
+    unbalanced = None
+
+    for child in graph[node]:
+        if len(counts) > 1 and counts[weights[child]] == 1:
+            unbalanced = child
+            print("Unbalanced child:", child)
+            break
+        val = weights[child]
+        total += weights[child]
+
+    if unbalanced:
+        diff = weights[unbalanced] - val
+        print(w_attr[unbalanced] - diff)
+        break
+
+    # Store the total weight of the node
+    weights[node] = total
